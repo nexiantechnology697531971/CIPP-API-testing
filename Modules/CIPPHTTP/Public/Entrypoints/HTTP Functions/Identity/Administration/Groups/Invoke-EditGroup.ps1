@@ -20,39 +20,7 @@ function Invoke-EditGroup {
     $GroupId = $UserObj.groupId.value ?? $UserObj.groupId
     $OrgGroup = New-GraphGetRequest -uri "https://graph.microsoft.com/beta/groups/$($GroupId)" -tenantid $UserObj.tenantFilter
 
-    $AddMembers = [System.Collections.Generic.List[object]]::new()
-
-    $UserObj.AddMember | ForEach-Object {
-        $AddMembers.Add([PSCustomObject]@{
-            type = 'user'
-            value = $_.value ?? $_
-            addedFields = $_.addedFields
-        })
-    }
-
-    $UserObj.AddUser | ForEach-Object {
-        $AddMembers.Add([PSCustomObject]@{
-            type = 'user'
-            value = $_.value ?? $_
-            addedFields = $_.addedFields
-        })
-    }
-
-    $UserObj.AddDevice | ForEach-Object {
-        $AddMembers.Add([PSCustomObject]@{
-            type = 'device'
-            value = $_.value ?? $_
-            addedFields = $_.addedFields
-        })
-    }
-
-    $UserObj.AddGroup | ForEach-Object {
-        $AddMembers.Add([PSCustomObject]@{
-            type = 'group'
-            value = $_.value ?? $_
-            addedFields = $_.addedFields
-        })
-    }
+    $AddMembers = $UserObj.AddMember
 
     $TenantId = $UserObj.tenantId ?? $UserObj.tenantFilter
 
@@ -111,24 +79,10 @@ function Invoke-EditGroup {
         $AddMembers | ForEach-Object {
             try {
                 # Add to group user action and edit group page sends in different formats, so we need to handle both
-                $MemberType = $_.type
-                $Member = $_.addedFields.userPrincipalName ??
-                          $_.addedFields.displayName ??
-                          $_.addedFields.deviceName ??
-                          $_.addedFields.groupName ??
-                          $_.value
-
+                $Member = $_.addedFields.userPrincipalName ?? $_.value ?? $_
                 $MemberID = $_.value
-
                 if (!$MemberID) {
-                    $LookupUri = switch ($MemberType) {
-                        'device' { "https://graph.microsoft.com/beta/devices?`$filter=displayName eq '$Member'" }
-                        'group'  { "https://graph.microsoft.com/beta/groups?`$filter=displayName eq '$Member' or mail eq '$Member'" }
-                        default  { "https://graph.microsoft.com/beta/users/$Member" }
-                    }
-
-                    $LookupResult = New-GraphGetRequest -uri $LookupUri -tenantid $TenantId
-                    $MemberID = ($LookupResult.value ?? @($LookupResult))[0].id
+                    $MemberID = (New-GraphGetRequest -uri "https://graph.microsoft.com/beta/users/$Member" -tenantid $TenantId).id
                 }
 
                 if ($GroupType -eq 'Distribution List' -or $GroupType -eq 'Mail-Enabled Security') {
